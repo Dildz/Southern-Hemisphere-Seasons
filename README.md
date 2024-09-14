@@ -1,9 +1,7 @@
 # Southern-Hemisphere-Seasons
 
 Version: 1.2.0
-
 Author: Dildz
-
 SPT-AKI Version: ^3.9.x
 
 
@@ -42,8 +40,7 @@ The mod includes several configuration options that can be adjusted in `config/c
 
 ## How It Works:
 
-1. Season Determination: The mod calculates the current season based on the server’s system date and time. 
-
+1. Season Determination: The mod calculates the current season based on the server’s system date and time.
 It follows the Southern Hemisphere's seasonal calendar:
    - Summer: December 1 to Feb 28
    - Autumn: March 1 to May 31
