@@ -1,7 +1,9 @@
 # Southern-Hemisphere-Seasons
 
 Version: 1.2.0
+
 Author: Dildz
+
 SPT-AKI Version: ^3.9.x
 
 
