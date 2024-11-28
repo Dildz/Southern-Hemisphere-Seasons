@@ -16,7 +16,7 @@ SPT Version: ^3.10.x
 ### Key Features:
 
 - Real-World Season Alignment: Automatically sets the in-game season based on the real-world date, corresponding to the Southern Hemisphere's seasonal calendar.
-- Additional "Late Autum" & "Early Spring" dates added.
+- Additional "Late Autum" & "Early Spring" seasons added.
 - Persistence Across Reboots: The season is recalculated on each server startup, ensuring continuity regardless of server reboots.
 
 
@@ -25,13 +25,13 @@ SPT Version: ^3.10.x
 1. Download and Extract: Download the mod package zip from releases and extract it into your SPT directory.
 
 2. Configuration: 
-   - The mod comes with a `config.json` file where you can enable or disable the mod or the mod console messages.
+   - The mod comes with a `config.json` file where you can enable or disable the mod, storms, or the mod console messages.
 
 
 ## How It Works:
 
 1. Season Determination: The mod calculates the current season based on the server’s system date and time.
-It follows the Southern Hemisphere's seasonal calendar:
+It follows the following seasonal calendar:
    - Summer: December 1 to February 28
    - Autumn: March 1 to May 14
    - Late Autum: May 15 to May 31
@@ -46,6 +46,7 @@ It follows the Southern Hemisphere's seasonal calendar:
 
 - The mod defaults to summer if there is any issue determining the current season.
 - Ensure the server’s time zone is correctly configured, as the mod relies on the system date to determine the season.
+- Will test making storms a chance per raid throughout the year and impliment in a later update, for now storms default to false (off).
 
 
 ## Support:
