@@ -4,134 +4,125 @@
  *
  */
 
-// Import required classes and interfaces
+// Required imports
+import path from "node:path";
 import { DependencyContainer } from "tsyringe";
-import { IPreSptLoadMod } from "@spt/models/external/IPreSptLoadMod";
-import {
-  enable,
-  consoleMessages,
-  lessFog,
-  lessRain,
-  clearSkies,
-} from "../config/config.json";
+import { IPostDBLoadMod } from "@spt/models/external/IPostDBLoadMod";
+import { VFS } from "@spt/utils/VFS";
 import { ConfigServer } from "@spt/servers/ConfigServer";
 import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
+import { jsonc } from "jsonc";
+import { ILogger } from "@spt/models/spt/utils/ILogger";
 import { IWeatherConfig } from "@spt/models/spt/config/IWeatherConfig";
-import { StaticRouterModService } from "@spt/services/mod/staticRouter/StaticRouterModService";
-import { SeasonMap } from "./utlis";
-import * as path from "path";
-import * as fs from "fs";
+import { IPostSptLoadMod } from "@spt/models/external/IPostSptLoadMod";
 
-// Path to the advanced weather configuration file
-const weatherConfigPath = path.resolve(__dirname, "../config/weatherConfigAdvanced.json");
+class SouthernHemisphereSeasons implements IPostDBLoadMod, IPostSptLoadMod {
+    private modName = "[Southern Hemisphere Seasons]";
+    private seasonsArray = [
+        "Summer",
+        "Autumn",
+        "Winter",
+        "Spring",
+        "Late Autumn",
+        "Early Spring",
+        "Storm",
+    ];
+    
+    private finalSelectedSeason: number;
+    private config: { enable: boolean; enableStorms: boolean; consoleMessages: boolean };
 
-// Ensure the file exists before attempting to load it
-let weatherBySeason: any;
-if (fs.existsSync(weatherConfigPath)) {
-  const weatherConfig = require(weatherConfigPath);
-  weatherBySeason = weatherConfig.weatherBySeason;
-} else {
-  console.error(`Weather configuration file not found at: ${weatherConfigPath}`);
-  throw new Error("Critical error: Weather configuration file missing.");
-}
-
-// Get the IRL season based on the current date
-function getRealLifeSeason(): number {
-  try {
-    const now = new Date();
-    const year = now.getFullYear();
-
-    // Define the start dates for each season based on the 1st of the month
-    const seasons = {
-      SUMMER: new Date(year, 11, 1), // Starts Dec 1
-      AUTUMN: new Date(year, 2, 1),  // Starts Mar 1
-      WINTER: new Date(year, 5, 1),  // Starts Jun 1
-      SPRING: new Date(year, 8, 1)   // Starts Sep 1
-    };
-
-    if (now >= seasons.SUMMER || now < seasons.AUTUMN) {
-      consoleMessages && console.log("[SouthernHemisphereSeasons] : Detected current IRL season as SUMMER.");
-      return 0; // SUMMER
-    }
-    if (now >= seasons.AUTUMN && now < seasons.WINTER) {
-      consoleMessages && console.log("[SouthernHemisphereSeasons] : Detected current IRL season as AUTUMN.");
-      return 1; // AUTUMN
-    }
-    if (now >= seasons.WINTER && now < seasons.SPRING) {
-      consoleMessages && console.log("[SouthernHemisphereSeasons] : Detected current IRL season as WINTER.");
-      return 2; // WINTER
-    }
-    if (now >= seasons.SPRING && now < seasons.SUMMER) {
-      consoleMessages && console.log("[SouthernHemisphereSeasons] : Detected current IRL season as SPRING.");
-      return 3; // SPRING
+    constructor() {
+        this.config = { enable: true, enableStorms: false, consoleMessages: true };  // default config values
     }
 
-    consoleMessages && console.log("[SouthernHemisphereSeasons] : Defaulting to SUMMER due to unexpected date range.");
-    return 0; // Default to SUMMER
-  } catch (error) {
-    console.error("Error determining IRL season:", error);
-    return 0; // Default to SUMMER in case of error
-  }
-}
+    // Load the mod configuration from `config.jsonc`.
+    private loadConfig(vfs: VFS): void {
+        try {
+            const configPath = path.resolve(__dirname, "../config/config.jsonc");
+            this.config = jsonc.parse(vfs.readFile(configPath));
+        } catch (error) {
+            console.error(`${this.modName} Failed to load config.jsonc:`, error);
+            this.config = { enable: true, enableStorms: false, consoleMessages: true };  // default values if an error occurs
+        }
+    }
 
-// Main mod class
-class SouthernHemisphereSeasons implements IPreSptLoadMod {
-  preSptLoad(container: DependencyContainer): void {
-    const configServer = container.resolve<ConfigServer>("ConfigServer");
-    const WeatherValues = configServer.getConfig<IWeatherConfig>(
-      ConfigTypes.WEATHER
-    );
+    // Determine the real-life season based on the Southern Hemisphere calendar.
+    private getRealLifeSeason(): number {
+        const now = new Date();
+        const month = now.getMonth(); // 0 = January, 11 = December
+        const day = now.getDate();    // Day of the month
+    
+        // Check if storms are enabled
+        if (this.config.enableStorms) {
+            // Southern Hemisphere season mapping with Storm
+            if ((month === 4 && day >= 15) || (month === 5 && day < 15)) return 6;  // Storm
+        }
+    
+        // Southern Hemisphere season mapping without Storm
+        if (month === 11 || month === 0 || month === 1) return 0;               // Summer
+        if ((month === 2 && day < 15) || (month === 4 && day >= 15)) return 4;  // Late Autumn
+        if (month === 2 || month === 3 || (month === 4 && day < 15)) return 1;  // Autumn
+        if ((month === 5 && day < 15) || (month === 7 && day >= 15)) return 5;  // Early Spring
+        if (month === 5 || month === 6 || (month === 7 && day < 15)) return 2;  // Winter
+        if (month === 8 || month === 9 || month === 10) return 3;               // Spring
+    
+        // Default to Summer in case of an error
+        return 0;
+    }
+    
+    // Set the in-game season based on the detected real-life season.
+    public postDBLoad(container: DependencyContainer): void {
+        const vfs = container.resolve<VFS>("VFS");
+        this.loadConfig(vfs);
 
-    const staticRouterModService = container.resolve<StaticRouterModService>(
-      "StaticRouterModService"
-    );
+        if (!this.config.enable) {
+            console.log(`${this.modName} Mod is disabled in config.jsonc. Skipping season adjustment.`);
+            return;
+        }
 
-    WeatherValues.overrideSeason = getRealLifeSeason();
-    WeatherValues.weather = weatherBySeason[SeasonMap[WeatherValues.overrideSeason]];
+        const configServer = container.resolve<ConfigServer>("ConfigServer");
+        const logger = container.resolve<ILogger>("WinstonLogger");
+        const weatherConfig: IWeatherConfig = configServer.getConfig(ConfigTypes.WEATHER);
 
-    consoleMessages && console.log(
-      "Season in game set to:",
-      SeasonMap[WeatherValues.overrideSeason]
-    );
+        weatherConfig.overrideSeason = null;    // reset initial value to null
 
-    // Apply the advanced weather settings if enabled
-    enable && staticRouterModService.registerStaticRouter(
-      `SouthernHemisphereSeasons`,
-      [
-        {
-          url: "/client/match/offline/end",
-          action: async (_url, info, sessionId, output) => {
-            WeatherValues.overrideSeason = getRealLifeSeason();
-            WeatherValues.weather = weatherBySeason[SeasonMap[WeatherValues.overrideSeason]];
+        // Detect the real-life season and update the weather configuration
+        const detectedSeason = this.getRealLifeSeason();
+        weatherConfig.overrideSeason = detectedSeason;
 
-            if (lessFog) {
-              WeatherValues.weather.fog.weights = [20, 1, 1, 1, 1];
-              consoleMessages && console.log("[SouthernHemisphereSeasons] : Applied less fog setting.");
-            }
-
-            if (lessRain) {
-              WeatherValues.weather.rain.weights = [5, 1, 1];
-              WeatherValues.weather.rainIntensity = { min: 0, max: 0.5 };
-              consoleMessages && console.log("[SouthernHemisphereSeasons] : Applied less rain setting.");
-            }
-
-            if (clearSkies) {
-              WeatherValues.weather.clouds.weights = [30, 1, 1, 1, 1, 1];
-              consoleMessages && console.log("[SouthernHemisphereSeasons] : Applied clear skies setting.");
-            }
-
-            consoleMessages && console.log(
-              `SouthernHemisphereSeasons: Weather settings applied for ${SeasonMap[WeatherValues.overrideSeason]}.`
+        if (this.config.consoleMessages) {
+            logger.success(
+                `${this.modName} Automatically selected season: ${this.seasonsArray[detectedSeason]}`
             );
+        }
 
-            return output;
-          },
-        },
-      ],
-      "aki"
-    );
-  }
+        this.finalSelectedSeason = weatherConfig.overrideSeason;
+    }
+
+    // Check for conflicts if other mods override the selected season.
+    public postSptLoad(container: DependencyContainer): void {
+        const configServer = container.resolve<ConfigServer>("ConfigServer");
+        const logger = container.resolve<ILogger>("WinstonLogger");
+        const weatherConfig: IWeatherConfig = configServer.getConfig(ConfigTypes.WEATHER);
+
+        if (!this.config.enable) return;    // skip if the mod is disabled
+
+        if (this.finalSelectedSeason !== weatherConfig.overrideSeason) {
+            if (weatherConfig.overrideSeason === null) {
+                logger.warning(
+                    `${this.modName} Another mod has overridden the selected season. Current season: Auto. Check your load order.`
+                );
+            } else if (weatherConfig.overrideSeason < this.seasonsArray.length) {
+                logger.warning(
+                    `${this.modName} Another mod has overridden the selected season. Current season: ${this.seasonsArray[weatherConfig.overrideSeason]}. Check your load order.`
+                );
+            } else {
+                logger.warning(
+                    `${this.modName} Another mod has overridden the selected season to an invalid value: ${weatherConfig.overrideSeason}. Check your load order.`
+                );
+            }
+        }
+    }
 }
 
-// Export the mod instance
-module.exports = { mod: new SouthernHemisphereSeasons() };
+export const mod = new SouthernHemisphereSeasons();

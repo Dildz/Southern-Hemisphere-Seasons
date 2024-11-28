@@ -1,10 +1,10 @@
 # Southern-Hemisphere-Seasons
 
-Version: 1.2.0
+Version: 1.3.0
 
 Author: Dildz
 
-SPT-AKI Version: ^3.9.x
+SPT Version: ^3.10.x
 
 
 ## Overview:
@@ -16,7 +16,7 @@ SPT-AKI Version: ^3.9.x
 ### Key Features:
 
 - Real-World Season Alignment: Automatically sets the in-game season based on the real-world date, corresponding to the Southern Hemisphere's seasonal calendar.
-- Seasonal Weather Conditions: Weather conditions are tailored to each season, with options to reduce fog, rain, and adjust cloud coverage.
+- Additional "Late Autum" & "Early Spring" dates added.
 - Persistence Across Reboots: The season is recalculated on each server startup, ensuring continuity regardless of server reboots.
 
 
@@ -25,36 +25,24 @@ SPT-AKI Version: ^3.9.x
 1. Download and Extract: Download the mod package zip from releases and extract it into your SPT directory.
 
 2. Configuration: 
-   - The mod comes with a `config.json` file where you can enable or disable various features like fog reduction, rain reduction, and clear skies.
-   - The `weatherconfigadvanced.json` file allows for detailed customization of weather parameters for each season. Don't change these values unless you really have to.
-
-
-## Configuration Options:
-
-The mod includes several configuration options that can be adjusted in `config/config.json`:
-
-- enable: Toggle the mod on or off.
-- consoleMessages: Enable or disable console messages for debugging.
-- lessFog: Reduce fog intensity across all seasons.
-- lessRain: Reduce the frequency and intensity of rain.
-- clearSkies: Increase the likelihood of clear skies.
+   - The mod comes with a `config.json` file where you can enable or disable the mod or the mod console messages.
 
 
 ## How It Works:
 
 1. Season Determination: The mod calculates the current season based on the server’s system date and time.
 It follows the Southern Hemisphere's seasonal calendar:
-   - Summer: December 1 to Feb 28
-   - Autumn: March 1 to May 31
-   - Winter: June 1 to August 31
+   - Summer: December 1 to February 28
+   - Autumn: March 1 to May 14
+   - Late Autum: May 15 to May 31
+   - Winter: June 1 to August 14
+   - Early Spring: August 15 to August 31
    - Spring: September 1 to November 30
 
-2. Weather Application: Based on the determined season, the mod applies the appropriate weather configuration as defined in `weatherconfigadvanced.json`.
-
-3. Persistence: The mod recalculates the season on each server start, ensuring that the correct season is always in effect.
+2. Persistence: The mod recalculates the season on each server start, ensuring that the correct season is always in effect.
 
 
-## Known Issues:
+## Notes:
 
 - The mod defaults to summer if there is any issue determining the current season.
 - Ensure the server’s time zone is correctly configured, as the mod relies on the system date to determine the season.
@@ -74,6 +62,7 @@ Please make sure to back up your game and mod files before making any changes.
 This mod is licensed under the MIT License. See the `LICENSE` file for more details.
 
 
-## Credit:
+## Credits:
 
-DewardianDev for the original [All The Seasons](https://hub.sp-tarkov.com/files/file/2052-all-the-seasons/#overview) mod which this is based on.
+- [DewardianDev](https://hub.sp-tarkov.com/user/27036-dewardiandev/) for the original [All The Seasons](https://hub.sp-tarkov.com/files/file/2052-all-the-seasons/#overview) mod which this is based on.
+- [sheepy](https://hub.sp-tarkov.com/user/20801-sheepy/) for the [Simple Season Selector](https://hub.sp-tarkov.com/files/file/2118-simple-season-selector/) mod which I used as a reference for updating to SPT 3.10.x.

@@ -1,7 +1,5 @@
 {
   "enable": true,
-  "consoleMessages": true,
-  "lessFog": false,
-  "lessRain": false,
-  "clearSkies": false
+  "enableStorms": false,
+  "consoleMessages": true
 }
