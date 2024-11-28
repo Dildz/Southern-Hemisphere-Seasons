@@ -70,13 +70,13 @@ class SouthernHemisphereSeasons implements IPostDBLoadMod, IPostSptLoadMod {
         return 0;
     }
     
-    // Set the in-game season based on the detected real-life season.
+    // Set the in-game season based on the detected real-life season or forced season.
     public postDBLoad(container: DependencyContainer): void {
         const vfs = container.resolve<VFS>("VFS");
         this.loadConfig(vfs);
 
         if (!this.config.enable) {
-            console.log(`${this.modName} Mod is disabled in config.jsonc. Skipping season adjustment.`);
+            console.log(`${this.modName} Mod is disabled in config. Skipping season adjustment.`);
             return;
         }
 
@@ -84,16 +84,23 @@ class SouthernHemisphereSeasons implements IPostDBLoadMod, IPostSptLoadMod {
         const logger = container.resolve<ILogger>("WinstonLogger");
         const weatherConfig: IWeatherConfig = configServer.getConfig(ConfigTypes.WEATHER);
 
-        weatherConfig.overrideSeason = null;    // reset initial value to null
+        weatherConfig.overrideSeason = null; // reset initial value to null
 
-        // Detect the real-life season and update the weather configuration
-        const detectedSeason = this.getRealLifeSeason();
-        weatherConfig.overrideSeason = detectedSeason;
+        // Check if a forced season is set in the configuration
+        if (typeof this.config.forceSeason === "number" && this.config.forceSeason >= 0 && this.config.forceSeason < this.seasonsArray.length) {
+            // Apply the forced season
+            weatherConfig.overrideSeason = this.config.forceSeason;
+            if (this.config.consoleMessages) {
+                logger.success(`${this.modName} Forced season selected: ${this.seasonsArray[this.config.forceSeason]}`);
+            }
+        } else {
+            // Automatically detect the real-life season if no forced season is set
+            const detectedSeason = this.getRealLifeSeason();
+            weatherConfig.overrideSeason = detectedSeason;
 
-        if (this.config.consoleMessages) {
-            logger.success(
-                `${this.modName} Automatically selected season: ${this.seasonsArray[detectedSeason]}`
-            );
+            if (this.config.consoleMessages) {
+                logger.success(`${this.modName} Automatically selected season: ${this.seasonsArray[detectedSeason]}`);
+            }
         }
 
         this.finalSelectedSeason = weatherConfig.overrideSeason;

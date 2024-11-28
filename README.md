@@ -47,6 +47,7 @@ It follows the following seasonal calendar:
 - The mod defaults to summer if there is any issue determining the current season.
 - Ensure the server’s time zone is correctly configured, as the mod relies on the system date to determine the season.
 - Will test making storms a chance per raid throughout the year and impliment in a later update, for now storms default to false (off).
+- The `forceSeason` option in `config.jsonc` I used for testing but can be set to force a season.
 
 
 ## Support:
