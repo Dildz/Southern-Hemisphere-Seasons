@@ -10,13 +10,13 @@ SPT Version: ^3.10.x
 ## Overview:
 
 - The Southern-Hemisphere-Seasons mod aligns the in-game seasons with the real-world seasons for players in the Southern Hemisphere.
-- The mod automatically adjusts the in-game season based on the current date, ensuring that the season reflects the real-world time of year. 
+- The mod automatically adjusts the in-game season based on the current date, ensuring that the season reflects the real-world time of year.
 
 
 ### Key Features:
 
 - Real-World Season Alignment: Automatically sets the in-game season based on the real-world date, corresponding to the Southern Hemisphere's seasonal calendar.
-- Additional "Late Autum" & "Early Spring" seasons added.
+- Additional "Late Autum", "Early Spring" & "Storm" seasons added.
 - Persistence Across Reboots: The season is recalculated on each server startup, ensuring continuity regardless of server reboots.
 
 
@@ -46,8 +46,18 @@ It follows the following seasonal calendar:
 
 - The mod defaults to summer if there is any issue determining the current season.
 - Ensure the server’s time zone is correctly configured, as the mod relies on the system date to determine the season.
-- Will test making storms a chance per raid throughout the year and impliment in a later update, for now storms default to false (off).
-- The `forceSeason` option in `config.jsonc` I used for testing but can be set to force a season.
+- Seasons "Early Spring" & "Storm" cause raid loads to fail - both are disabled until a fix is found.
+- To-Do: make storms a chance % per raid during Summer months, for now storms default to false (off).
+- The `forceSeason` option in `config.jsonc` is used for testing but can it can be set to force a season.
+   Valid `forceSeason` values:
+   - Summer = 0
+   - Autumn = 1
+   - Winter = 2
+   - Spring = 3
+   - LateAutumn = 4
+   - EarlySpring = 5 (disabled - will default to -1)
+   - Storm = 6 (disabled - will default to -1)
+   - Auto Detect = -1
 
 
 ## Support:
