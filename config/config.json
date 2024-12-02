@@ -1,7 +1,6 @@
 {
-  "enable": true,
+  "enableMod": true,
+  "enableStorms": false,
   "consoleMessages": true,
-  "lessFog": false,
-  "lessRain": false,
-  "clearSkies": false
+  "forceSeason": -1
 }
