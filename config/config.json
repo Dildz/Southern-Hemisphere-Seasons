@@ -1,5 +1,5 @@
 {
-  "enable": true,
+  "enableMod": true,
   "enableStorms": false,
   "consoleMessages": true,
   "forceSeason": -1
