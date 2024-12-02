@@ -49,7 +49,8 @@ It follows the following seasonal calendar:
 - Seasons "Early Spring" & "Storm" cause raid loads to fail - both are disabled until a fix is found.
 - To-Do: make storms a chance % per raid during Summer months, for now storms default to false (off).
 - The `forceSeason` option in `config.jsonc` is used for testing but can it can be set to force a season.
-   > Valid `forceSeason` values:
+
+  Valid `forceSeason` values:
    - Summer = 0
    - Autumn = 1
    - Winter = 2
