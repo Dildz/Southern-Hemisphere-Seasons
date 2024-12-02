@@ -56,14 +56,14 @@ It follows the following seasonal calendar:
    - Winter = 2
    - Spring = 3
    - LateAutumn = 4
-   - EarlySpring = 5 (disabled - will default to -1)
-   - Storm = 6 (disabled - will default to -1)
+   - EarlySpring = 5 (disabled - will default to auto detect)
+   - Storm = 6 (disabled - will default to auto detect)
    - Auto Detect = -1
 
 
 ## Support:
 
-This mod is provided as-is, with no official support.
+This mod is provided as-is, with no official support. If bugs are reported I will do my best to fix.
 
 It is intended for tinkerers and advanced users who understand how to modify and troubleshoot their game environment.
 
@@ -78,4 +78,4 @@ This mod is licensed under the MIT License. See the `LICENSE` file for more deta
 ## Credits:
 
 - [DewardianDev](https://hub.sp-tarkov.com/user/27036-dewardiandev/) for the original [All The Seasons](https://hub.sp-tarkov.com/files/file/2052-all-the-seasons/#overview) mod which this is based on.
-- [sheepy](https://hub.sp-tarkov.com/user/20801-sheepy/) for the [Simple Season Selector](https://hub.sp-tarkov.com/files/file/2118-simple-season-selector/) mod which I used as a reference for updating to SPT 3.10.x.
+- [sheepy](https://hub.sp-tarkov.com/user/20801-sheepy/) for the [Simple Season Selector](https://hub.sp-tarkov.com/files/file/2118-simple-season-selector/) mod which I used as a reference for updating to SPT 3.10.X as well as adapting certain features.
