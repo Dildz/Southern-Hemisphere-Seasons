@@ -24,7 +24,7 @@ SPT Version: 4.0.x
 1. Download and Extract: Download the mod package zip from releases and extract it into your SPT directory.
 
 2. Configuration: 
-   - The mod comes with a `config.json` file where you can enable/disbale custom seasonal weather, or force a season.
+   - The mod comes with a `config.json` file where you can enable/disable custom seasonal weather, or force a season.
 
 
 ## How It Works:
