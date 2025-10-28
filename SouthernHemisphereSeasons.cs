@@ -61,7 +61,7 @@ public class ChangeSeason(ConfigServer configServer, ISptLogger<ChangeSeason> lo
             ApplyCustomWeather(pathToMod, seasonEnum);
         }
         
-        logger.Info($"[Southern Hemisphere Seasons] Applied season: {seasonEnum} (ends on {_modState.EndDate})");
+        logger.Success($"[Southern Hemisphere Seasons] Applied season: {seasonEnum} (ends on {_modState.EndDate})");
         return Task.CompletedTask;
     }
 
@@ -69,7 +69,7 @@ public class ChangeSeason(ConfigServer configServer, ISptLogger<ChangeSeason> lo
     private int GetCurrentSeason(string modPath, ModConfig config) {
         // Check if forceSeason is configured
         if (config.ForceSeason.HasValue) {
-            logger.Info($"[Southern Hemisphere Seasons] Using forced season: {(Season)config.ForceSeason.Value}");
+            logger.Success($"[Southern Hemisphere Seasons] Using forced season: {(Season)config.ForceSeason.Value}");
             return config.ForceSeason.Value;
         }
 
@@ -116,8 +116,6 @@ public class ChangeSeason(ConfigServer configServer, ISptLogger<ChangeSeason> lo
     private int CalculateNewSeason(string modPath, DateTime currentDate, ModState oldState) {
         var currentSeasonDef = GetSeasonDefinitionByDate(currentDate);
         var endDate = currentDate.AddDays(currentSeasonDef.Length);
-        
-        logger.Info($"[Southern Hemisphere Seasons] Season expired. New season: {currentSeasonDef.Season}");
         
         var newState = new ModState {
             StartDate = currentDate.ToString("yyyy-MM-dd"),
