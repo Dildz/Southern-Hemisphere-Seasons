@@ -8,7 +8,7 @@ config.json settings:
   - true: Use the custom weather settings from customWeather.json
   - false: Use SPT's default weather settings
 
-"ForceSeason": (number or null)
+Force Season values: (number or null)
   - null: Automatic - follows Southern Hemisphere calendar:
     * Summer: December 1 to February 28
     * Autumn: March 1 to April 30  
@@ -16,15 +16,17 @@ config.json settings:
     * Winter: June 1 to August 31
     * Early Spring: September 1 to September 30
     * Spring: October 1 to November 30
-
-  Force Season values:
   - 0: Summer
   - 1: Autumn
-  - 2: Spring
-  - 3: Storm
+  - 2: Winter
+  - 3: Spring
   - 4: Late Autumn
   - 5: Early Spring
-  - 6: Winter
+  - 6: Storm
+
+Testing Notes:
+* remove log Applied season: [SEASON] (ends on ) when a season is forced
+* make sure to exclude STORM from auto mode
 
 Example configurations:
 -----------------------
@@ -38,7 +40,7 @@ Automatic Southern Hemisphere seasons with custom weather:
 Force Winter season with default SPT weather:
 {
   "UseCustomWeather": false,
-  "ForceSeason": 6
+  "ForceSeason": 2
 }
 
 Force Summer with custom weather:

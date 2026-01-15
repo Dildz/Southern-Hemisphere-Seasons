@@ -20,12 +20,12 @@ public record ModMetadata : AbstractModMetadata{
     public override string Author { get; init; } = "Dildz";
     public override List<string>? Contributors { get; init; }
     public override SemanticVersioning.Version Version { get; init; } = new("2.0.0");
-    public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.2");
+    public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.11");
     public override List<string>? Incompatibilities { get; init; }
     public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
     public override string? Url { get; init; }
     public override bool? IsBundleMod { get; init; }
-    public override string? License { get; init; } = "MIT";
+    public override string License { get; init; } = "MIT";
 }
 
 // Main class that handles season calculation - runs when the game loads
@@ -196,7 +196,7 @@ public class ChangeSeason(ConfigServer configServer, ISptLogger<ChangeSeason> lo
                 var presetsNode = root["Presets"] as JsonObject;
                 var seasonPresetNode = presetsNode?[seasonWeatherKey] as JsonObject;
                 
-                if (seasonPresetNode is not null) {
+                if (seasonPresetNode is not null && _weatherConfig.Weather.PresetWeights is not null) {
                     foreach (var kvp in seasonPresetNode) {
                         var key = kvp.Key;
                         if (kvp.Value is JsonNode node) {
@@ -221,7 +221,7 @@ public record SeasonDefinition(Season Season, int StartMonth, int StartDay, int 
 // Configuration class for the mod
 public class ModConfig {
     public bool UseCustomWeather { get; set; } = true;
-    public int? ForceSeason { get; set; } // null = auto, 0=Summer, 1=Autumn, 2=Spring, 3=Storm, 4=LateAutumn, 5=EarlySpring, 6=Winter
+    public int? ForceSeason { get; set; } // null = auto, 0=Summer, 1=Autumn, 2=Winter, 3=Spring, 4=LateAutumn, 5=EarlySpring, 6=Storm
 }
 
 // State tracking class - saved to state.json
