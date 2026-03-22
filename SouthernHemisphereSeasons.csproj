@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -7,33 +7,47 @@
     <Nullable>enable</Nullable>
     <OutputType>Library</OutputType>
     <Version>2.0.0</Version>
-    <!-- The two lines below will set the output path for the binaries -->
-    <OutputPath>bin\$(Configuration)\$(ProjectName)\$(AssemblyName)-$(Version)\</OutputPath>
+    <OutputPath>bin\$(Configuration)\$(ProjectName)\$(AssemblyName)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
-<ItemGroup>
-    <PackageReference Include="SPTarkov.Common" Version="4.0.0" />
-    <PackageReference Include="SPTarkov.DI" Version="4.0.0" />
-    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.0" />
+  <ItemGroup>
+    <PackageReference Include="SPTarkov.Common" Version="4.0.13" />
+    <PackageReference Include="SPTarkov.DI" Version="4.0.13" />
+    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.13" />
   </ItemGroup>
 
-    <ItemGroup>
-    <None Include="$(MSBuildProjectFullPath).user" Condition="Exists('$(MSBuildProjectFullPath).user')" />
+  <ItemGroup>
+    <None Include="config\**">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
-  <PropertyGroup>
-    <ModsDirectoryPath>$(SPTPath)\user\mods\$(MSBuildProjectName)</ModsDirectoryPath>
-  </PropertyGroup>
+  <!-- After a Release build, create a zip ready to extract into the SPT install folder -->
+  <Target Name="CreateReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <ZipStagingRoot>$(BaseIntermediateOutputPath)_zip_staging</ZipStagingRoot>
+      <ZipStagingMod>$(ZipStagingRoot)\user\mods\$(ProjectName)</ZipStagingMod>
+      <ZipOutput>$(ProjectDir)bin\Release\$(ProjectName)-v$(Version).zip</ZipOutput>
+    </PropertyGroup>
 
-  <Target Name="CopyToSPT" AfterTargets="AfterBuild" Condition="'$(SPTPath)' != ''">
-    <Message Importance="high" Text="Copying mods to $(ModsDirectoryPath)" />
+    <RemoveDir Directories="$(ZipStagingRoot)" />
+    <MakeDir Directories="$(ZipStagingMod)" />
+
     <ItemGroup>
-      <FilesToCopy Include="$(OutputPath)$(TargetName)$(TargetExt)" />
-      <FilesToCopy Include="$(OutputPath)$(TargetName).pdb" />
+      <ZipFiles Include="$(OutputPath)**\*" Exclude="$(OutputPath)_zip_staging\**" />
     </ItemGroup>
-    <Copy SourceFiles="@(FilesToCopy)" DestinationFolder="$(ModsDirectoryPath)" ContinueOnError="false" />
-    <Message Text="Files copied" />
+
+    <Copy SourceFiles="@(ZipFiles)"
+          DestinationFiles="@(ZipFiles->'$(ZipStagingMod)\%(RecursiveDir)%(Filename)%(Extension)')" />
+
+    <ZipDirectory SourceDirectory="$(ZipStagingRoot)"
+                  DestinationFile="$(ZipOutput)"
+                  Overwrite="true" />
+
+    <RemoveDir Directories="$(ZipStagingRoot)" />
+
+    <Message Text="[SHS] Release zip created: $(ZipOutput)" Importance="high" />
   </Target>
 
 </Project>

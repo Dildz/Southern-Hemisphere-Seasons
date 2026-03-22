@@ -1,0 +1,5 @@
+{
+  "enabled": true,                // enable or disable the mod
+  "forceSeason": null,            // force a specific season (null = auto, 0 = Summer, 1 = Autumn, 2 = Winter, 3 = Spring, 4 = Late Autumn, 5 = Early Spring)
+  "allowEventSeason": false       // if true, let SPT seasonal events (e.g. Christmas) override this mod's season (default: false)
+}

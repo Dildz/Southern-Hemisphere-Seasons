@@ -1,243 +1,209 @@
-﻿using SPTarkov.Common.Extensions;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Helpers;
+using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
+using SPTarkov.Server.Core.Services;
 using System.Reflection;
-using System.Text.Json.Nodes;
 using System.Text.Json;
-using Season = SPTarkov.Server.Core.Models.Enums.Season;
 
 namespace SouthernHemisphereSeasons;
 
-// Mod metadata - basic information about the mod
-public record ModMetadata : AbstractModMetadata{
+public record ModMetadata : AbstractModMetadata
+{
     public override string ModGuid { get; init; } = "com.dildz.southern-hemisphere-seasons";
-    public override string Name { get; init; } = "SouthernHemisphereSeasons";
+    public override string Name { get; init; } = "Southern-Hemisphere-Seasons";
     public override string Author { get; init; } = "Dildz";
-    public override List<string>? Contributors { get; init; }
+    public override List<string>? Contributors { get; init; } = ["bushtail"];
     public override SemanticVersioning.Version Version { get; init; } = new("2.0.0");
-    public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.11");
+    public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.0");
     public override List<string>? Incompatibilities { get; init; }
     public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
     public override string? Url { get; init; }
-    public override bool? IsBundleMod { get; init; }
+    public override bool? IsBundleMod { get; init; } = false;
     public override string License { get; init; } = "MIT";
 }
 
-// Main class that handles season calculation - runs when the game loads
-[Injectable(TypePriority = OnLoadOrder.PreSptModLoader + 1)]
-public class ChangeSeason(ConfigServer configServer, ISptLogger<ChangeSeason> logger, ModHelper modHelper) : IOnLoad {
-    // Get the game's weather configuration
-    private readonly WeatherConfig _weatherConfig = configServer.GetConfig<WeatherConfig>();
-    
-    // Southern hemisphere season order and dates with fixed lengths
-    private readonly SeasonDefinition[] _southernSeasons = [
-        new SeasonDefinition(Season.SUMMER, 12, 1, 2, 28, 90),      // Summer: Dec 1 - Feb 28 (90 days)
-        new SeasonDefinition(Season.AUTUMN, 3, 1, 4, 30, 61),       // Autumn: Mar 1 - Apr 30 (61 days)
-        new SeasonDefinition(Season.AUTUMN_LATE, 5, 1, 5, 31, 31),  // Late Autumn: May 1 - May 31 (31 days)
-        new SeasonDefinition(Season.WINTER, 6, 1, 8, 31, 92),       // Winter: Jun 1 - Aug 31 (92 days)
-        new SeasonDefinition(Season.SPRING_EARLY, 9, 1, 9, 30, 30), // Early Spring: Sep 1 - Sep 30 (30 days)
-        new SeasonDefinition(Season.SPRING, 10, 1, 11, 30, 61)      // Spring: Oct 1 - Nov 30 (61 days)
-    ];
-    
-    private ModState _modState = new();
+public record ModConfig
+{
+    public bool Enabled { get; set; } = true;
+    public int? ForceSeason { get; set; }
+    public bool AllowEventSeason { get; set; } = false;
+}
 
-    // This method runs when the mod loads
-    public Task OnLoad() {
-        var pathToMod = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
-        var config = modHelper.GetJsonDataFromFile<ModConfig>(pathToMod, "config.json");
-        
-        // Get season, override season
-        var season = GetCurrentSeason(pathToMod, config);
-        var seasonEnum = (Season)season;
-        _weatherConfig.OverrideSeason = seasonEnum;
-        
-        // Apply custom weather
-        if (config.UseCustomWeather) {
-            ApplyCustomWeather(pathToMod, seasonEnum);
+// Shared state between the OnLoad and OnUpdate classes (SPT may create separate instances for each).
+public static class SeasonState
+{
+    public static ModConfig Config { get; set; } = new();
+    public static Season? LastSeason { get; set; }
+    public static bool EventSeasonActive { get; set; }
+}
+
+// Run after PostSptModLoader so we override SPT's own weather setup and regenerate the forecast.
+#pragma warning disable CS0618
+[Injectable(TypePriority = OnLoadOrder.PostSptModLoader + 1)]
+public class SeasonLoader(
+    ISptLogger<SeasonLoader> logger,
+    ConfigServer configServer,
+    RaidWeatherService raidWeatherService,
+    ModHelper modHelper) : IOnLoad
+{
+    private readonly WeatherConfig _weatherConfig = configServer.GetConfig<WeatherConfig>();
+#pragma warning restore CS0618
+
+    private const string ModName = "[Southern-Hemisphere-Seasons]";
+
+    public Task OnLoad()
+    {
+        LoadConfig();
+
+        if (!SeasonState.Config.Enabled)
+        {
+            logger.Info($"{ModName} Mod is disabled in config.jsonc");
+            return Task.CompletedTask;
         }
-        
-        logger.Success($"[Southern Hemisphere Seasons] Applied season: {seasonEnum} (ends on {_modState.EndDate})");
+
+        // If a seasonal event already forced a season and we're configured to respect that, back off
+        if (SeasonState.Config.AllowEventSeason && _weatherConfig.OverrideSeason.HasValue)
+        {
+            SeasonState.EventSeasonActive = true;
+            SeasonState.LastSeason = _weatherConfig.OverrideSeason.Value;
+            logger.Info($"{ModName} Seasonal event detected - respecting event season: {SeasonHelper.GetSeasonName(_weatherConfig.OverrideSeason.Value)}");
+            return Task.CompletedTask;
+        }
+
+        var season = SeasonHelper.GetSeason(SeasonState.Config);
+        _weatherConfig.OverrideSeason = season;
+        SeasonState.LastSeason = season;
+
+        // Regenerate the weather forecast with our season (SPT already generated one, we need to replace it)
+        raidWeatherService.GenerateFutureWeatherAndCache(season);
+
+        logger.Success($"{ModName} Loaded - Season set to: {SeasonHelper.GetSeasonName(season)}");
         return Task.CompletedTask;
     }
 
-    // Returns the current season based on config, state file, or southern hemisphere calendar
-    private int GetCurrentSeason(string modPath, ModConfig config) {
-        // Check if forceSeason is configured
-        if (config.ForceSeason.HasValue) {
-            logger.Success($"[Southern Hemisphere Seasons] Using forced season: {(Season)config.ForceSeason.Value}");
-            return config.ForceSeason.Value;
-        }
+    private void LoadConfig()
+    {
+        try
+        {
+            var pathToMod = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
+            var configPath = Path.Combine(pathToMod, "config", "config.jsonc");
 
-        var stateFilePath = Path.Combine(modPath, "state.json");
-        var today = DateTime.Now;
-        
-        // If no state file exists, create one based on southern hemisphere calendar
-        if (!File.Exists(stateFilePath)) {
-            return CreateNewSeasonState(modPath, today);
-        }
-        
-        // Load existing state and check if season has expired
-        var state = modHelper.GetJsonDataFromFile<ModState>(modPath, "state.json");
-        var endDate = DateTime.Parse(state.EndDate);
-        
-        if (today > endDate) {
-            // Season has expired, calculate new season based on southern hemisphere calendar
-            return CalculateNewSeason(modPath, today, state);
-        }
-        
-        _modState = state;
-        return state.CurrentSeason;
-    }
-
-    // Creates a new season state based on southern hemisphere calendar
-    private int CreateNewSeasonState(string modPath, DateTime currentDate) {
-        var currentSeasonDef = GetSeasonDefinitionByDate(currentDate);
-        var endDate = currentDate.AddDays(currentSeasonDef.Length);
-        
-        logger.Info($"[Southern Hemisphere Seasons] Creating new state file. Season: {currentSeasonDef.Season}");
-        
-        var newState = new ModState {
-            StartDate = currentDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
-            CurrentSeason = (int)currentSeasonDef.Season
-        };
-        
-        ModExtensions.SaveJsonDataToFile(modHelper, modPath, "state.json", newState);
-        _modState = newState;
-        return (int)currentSeasonDef.Season;
-    }
-
-    // Calculates new season when current one expires
-    private int CalculateNewSeason(string modPath, DateTime currentDate, ModState oldState) {
-        var currentSeasonDef = GetSeasonDefinitionByDate(currentDate);
-        var endDate = currentDate.AddDays(currentSeasonDef.Length);
-        
-        var newState = new ModState {
-            StartDate = currentDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
-            CurrentSeason = (int)currentSeasonDef.Season
-        };
-        
-        ModExtensions.SaveJsonDataToFile(modHelper, modPath, "state.json", newState);
-        _modState = newState;
-        return (int)currentSeasonDef.Season;
-    }
-
-    // Gets the southern hemisphere season definition for a given date
-    private SeasonDefinition GetSeasonDefinitionByDate(DateTime date) {
-        var monthDay = date.Month * 100 + date.Day;
-        
-        foreach (var seasonDef in _southernSeasons) {
-            var start = seasonDef.StartMonth * 100 + seasonDef.StartDay;
-            var end = seasonDef.EndMonth * 100 + seasonDef.EndDay;
-            
-            // Handle seasons that don't wrap year boundaries
-            if (start <= end) {
-                if (monthDay >= start && monthDay <= end) {
-                    return seasonDef;
-                }
-            } else {
-                // Handle seasons that wrap year boundaries (like Summer: Dec-Feb)
-                if (monthDay >= start || monthDay <= end) {
-                    return seasonDef;
-                }
-            }
-        }
-        
-        // Fallback - should never reach here
-        logger.Warning("[Southern Hemisphere Seasons] Date outside expected ranges, defaulting to Summer");
-        return _southernSeasons[0]; // Return Summer as fallback
-    }
-
-    // Apply custom weather settings from JSON file
-    private void ApplyCustomWeather(string modPath, Season currentSeason) {
-        try {
-            var root = modHelper.GetJsonDataFromFile<JsonNode>(modPath, "customWeather.json");
-            
-            // Null check for root
-            if (root == null) {
-                logger.Warning("[Southern Hemisphere Seasons] customWeather.json not found or invalid");
+            if (!File.Exists(configPath))
+            {
+                logger.Warning($"{ModName} Config file not found, using defaults");
                 return;
             }
 
-            var weatherPresetWeightNode = root["weatherPresetWeight"] as JsonObject;
-            
-            // Override weather probabilities for each season
-            if (weatherPresetWeightNode is not null) {
-                foreach (var kvp in weatherPresetWeightNode) {
-                    var seasonKey = kvp.Key;
-                    var valueObj = kvp.Value as JsonObject;
-                    var dict = new Dictionary<SPTarkov.Server.Core.Models.Spt.Config.WeatherPreset, double>();
-                    
-                    if (valueObj != null) {
-                        foreach (var inner in valueObj) {
-                            if (Enum.TryParse(inner.Key, true, out SPTarkov.Server.Core.Models.Spt.Config.WeatherPreset preset) && inner.Value is JsonValue jv && jv.TryGetValue<double>(out var w)) {
-                                dict[preset] = w;
-                            }
-                        }
-                    }
-                    _weatherConfig.Weather.WeatherPresetWeight[seasonKey] = dict;
-                }
-            }
-            
-            // Apply detailed weather presets for specific seasons
-            if (currentSeason is Season.AUTUMN or Season.SPRING or Season.SPRING_EARLY or Season.AUTUMN_LATE or Season.WINTER) {
-                var seasonWeatherKey = "DEMI"; // Default for spring/autumn
-                if (currentSeason is Season.WINTER) { 
-                    seasonWeatherKey = "WINTER"; 
-                }
-                
-                // Safe null checks for JSON navigation
-                var presetsNode = root["Presets"] as JsonObject;
-                var seasonPresetNode = presetsNode?[seasonWeatherKey] as JsonObject;
-                
-                if (seasonPresetNode is not null && _weatherConfig.Weather.PresetWeights is not null) {
-                    foreach (var kvp in seasonPresetNode) {
-                        var key = kvp.Key;
-                        if (kvp.Value is JsonNode node) {
-                            var value = node.Deserialize<SPTarkov.Server.Core.Models.Spt.Config.PresetWeights>();
-                            if (value != null) {
-                                _weatherConfig.Weather.PresetWeights[key] = value;
-                            }
-                        }
-                    }
-                }
-            }
+            var json = File.ReadAllText(configPath);
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = JsonCommentHandling.Skip
+            };
+            var config = JsonSerializer.Deserialize<ModConfig>(json, options);
+
+            if (config != null)
+                SeasonState.Config = config;
         }
-        catch (Exception ex) {
-            logger.Error($"[Southern Hemisphere Seasons] Error applying custom weather: {ex.Message}");
+        catch (Exception e)
+        {
+            logger.Error($"{ModName} Error reading config: {e.Message}");
         }
     }
 }
 
-// Represents a season with its date range and fixed length
-public record SeasonDefinition(Season Season, int StartMonth, int StartDay, int EndMonth, int EndDay, int Length);
-
-// Configuration class for the mod
-public class ModConfig {
-    public bool UseCustomWeather { get; set; } = true;
-    public int? ForceSeason { get; set; } // null = auto, 0=Summer, 1=Autumn, 2=Winter, 3=Spring, 4=LateAutumn, 5=EarlySpring, 6=Storm
-}
-
-// State tracking class - saved to state.json
-public class ModState {
-    public string StartDate { get; set; } = "";
-    public string EndDate { get; set; } = "";
-    public int CurrentSeason { get; set; }
-}
-
-// Helper extension for saving JSON files
-public static class ModExtensions
+// Recheck the season every hour for long-running servers.
+[Injectable(TypePriority = OnUpdateOrder.InsuranceCallbacks)]
+#pragma warning disable CS0618
+public class SeasonUpdater(
+    ISptLogger<SeasonUpdater> logger,
+    ConfigServer configServer,
+    RaidWeatherService raidWeatherService) : IOnUpdate
 {
-    public static void SaveJsonDataToFile<T>(this ModHelper modHelper, string pathToFile, string fileName, T data)
+    private readonly WeatherConfig _weatherConfig = configServer.GetConfig<WeatherConfig>();
+#pragma warning restore CS0618
+
+    private const string ModName = "[Southern-Hemisphere-Seasons]";
+    private const long CheckIntervalMs = 3_600_000; // 1 hour
+    private long _timeSinceLastCheck;
+
+    public Task<bool> OnUpdate(long timeSinceLastRun)
     {
-        var fullPath = Path.Combine(pathToFile, fileName);
-        var json = System.Text.Json.JsonSerializer.Serialize(data, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(fullPath, json);
+        if (!SeasonState.Config.Enabled || SeasonState.EventSeasonActive)
+            return Task.FromResult(true);
+
+        _timeSinceLastCheck += timeSinceLastRun;
+        if (_timeSinceLastCheck < CheckIntervalMs)
+            return Task.FromResult(true);
+
+        _timeSinceLastCheck = 0;
+
+        var season = SeasonHelper.GetSeason(SeasonState.Config);
+        if (season != SeasonState.LastSeason)
+        {
+            _weatherConfig.OverrideSeason = season;
+            SeasonState.LastSeason = season;
+            raidWeatherService.GenerateFutureWeatherAndCache(season);
+            logger.Success($"{ModName} Season changed to: {SeasonHelper.GetSeasonName(season)}");
+        }
+
+        return Task.FromResult(true);
+    }
+}
+
+public static class SeasonHelper
+{
+    private static readonly string[] SeasonNames =
+    [
+        "Summer",       // 0
+        "Autumn",       // 1
+        "Winter",       // 2
+        "Spring",       // 3
+        "Late Autumn",  // 4
+        "Early Spring"  // 5
+    ];
+
+    public static Season GetSeason(ModConfig config)
+    {
+        if (config.ForceSeason is { } forced && forced >= 0 && forced <= 5)
+            return (Season)forced;
+
+        return GetSeasonFromDate();
+    }
+
+    /// <summary>
+    /// Determines the current season based on the Southern Hemisphere calendar:
+    /// - Summer:       December 1 - February 28/29
+    /// - Autumn:       March 1 - April 30
+    /// - Late Autumn:  May 1 - May 31
+    /// - Winter:       June 1 - August 31
+    /// - Early Spring: September 1 - September 30
+    /// - Spring:       October 1 - November 30
+    /// </summary>
+    private static Season GetSeasonFromDate()
+    {
+        var month = DateTime.Now.Month;
+
+        return month switch
+        {
+            12 or 1 or 2 => Season.SUMMER,
+            3 or 4       => Season.AUTUMN,
+            5            => Season.AUTUMN_LATE,
+            6 or 7 or 8  => Season.WINTER,
+            9            => Season.SPRING_EARLY,
+            10 or 11     => Season.SPRING,
+            _            => Season.SUMMER
+        };
+    }
+
+    public static string GetSeasonName(Season season)
+    {
+        var index = (int)season;
+        return index >= 0 && index < SeasonNames.Length ? SeasonNames[index] : "Unknown";
     }
 }
