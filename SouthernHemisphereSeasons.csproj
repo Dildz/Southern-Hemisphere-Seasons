@@ -27,7 +27,7 @@
   <Target Name="CreateReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <PropertyGroup>
       <ZipStagingRoot>$(BaseIntermediateOutputPath)_zip_staging</ZipStagingRoot>
-      <ZipStagingMod>$(ZipStagingRoot)\user\mods\$(ProjectName)</ZipStagingMod>
+      <ZipStagingMod>$(ZipStagingRoot)\SPT\user\mods\$(ProjectName)</ZipStagingMod>
       <ZipOutput>$(ProjectDir)bin\Release\$(ProjectName)-v$(Version).zip</ZipOutput>
     </PropertyGroup>
 
