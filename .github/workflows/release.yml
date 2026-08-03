@@ -1,0 +1,70 @@
+name: Build & Release
+
+# Every push and PR runs the unit tests.
+# Cut a release by pushing a version tag, e.g.:
+#   git tag v3.0.0 && git push origin v3.0.0
+# CI then builds the Release zip and attaches it to a matching GitHub Release.
+# Manual runs (workflow_dispatch) just build + upload the zip as an artifact for testing.
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create the GitHub Release
+
+jobs:
+  build:
+    # Linux runner: the build + zip target are path-agnostic, so this matches how many SPT servers
+    # run (Linux/Docker) and is faster/cheaper than a Windows runner.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # SPT 4.1 targets .NET 10 (server-csharp Build.props), so 9.0.x is no longer enough.
+      # Action + version string match sp-tarkov/server-csharp's own .github/workflows/test.yaml,
+      # which builds and tests net10.0 on ubuntu-latest today.
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0
+
+      # Fail early if the pushed tag doesn't match <Version> in the csproj, so we never
+      # publish a zip whose filename disagrees with the tag.
+      - name: Verify tag matches csproj version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          CSPROJ_VERSION=$(grep -oE '<Version>[^<]+</Version>' SouthernHemisphereSeasons.csproj | head -1 | sed -E 's|</?Version>||g')
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "csproj=<$CSPROJ_VERSION>  tag=<$TAG_VERSION>"
+          if [ "$CSPROJ_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match csproj <Version>$CSPROJ_VERSION</Version>. Bump the csproj version to match the tag."
+            exit 1
+          fi
+
+      # Runs on every push/PR. A failure here blocks the release steps below.
+      - name: Test
+        run: dotnet test Tests/SouthernHemisphereSeasons.Tests.csproj --verbosity normal
+
+      # Release build runs the CreateReleaseZip target -> bin/Release/SouthernHemisphereSeasons-v<version>.zip
+      - name: Build Release
+        run: dotnet build SouthernHemisphereSeasons.csproj -c Release
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SouthernHemisphereSeasons-zip
+          path: bin/Release/*.zip
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/Release/*.zip
+          generate_release_notes: true
