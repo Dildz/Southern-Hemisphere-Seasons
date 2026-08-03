@@ -23,6 +23,15 @@
     </None>
   </ItemGroup>
 
+  <!-- Tests/ sits inside this project's folder, so the SDK's implicit globs would otherwise pull the
+       test sources into the mod assembly - which has no NUnit reference and fails to compile. -->
+  <ItemGroup>
+    <Compile Remove="Tests/**" />
+    <Content Remove="Tests/**" />
+    <None Remove="Tests/**" />
+    <EmbeddedResource Remove="Tests/**" />
+  </ItemGroup>
+
   <!-- After a Release build, create a zip ready to extract into the SPT install folder -->
   <Target Name="CreateReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <PropertyGroup>
