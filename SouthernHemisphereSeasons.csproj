@@ -1,20 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>SouthernHemisphereSeasons</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <OutputType>Library</OutputType>
-    <Version>2.0.0</Version>
+    <Version>3.0.0</Version>
     <OutputPath>bin\$(Configuration)\$(ProjectName)\$(AssemblyName)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SPTarkov.Common" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.DI" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.13" />
+    <PackageReference Include="SPTarkov.Common" Version="4.1.1" />
+    <PackageReference Include="SPTarkov.DI" Version="4.1.1" />
+    <PackageReference Include="SPTarkov.Server.Core" Version="4.1.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,20 +26,23 @@
   <!-- After a Release build, create a zip ready to extract into the SPT install folder -->
   <Target Name="CreateReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <PropertyGroup>
+      <!-- Forward slashes so this target builds on Windows and Linux/Docker alike (MSBuild accepts / on both).
+           SPT 4.1 renamed the server folder from SPT/ to SPT_Runtime/ (confirmed: the 4.1.1 release
+           archive's top-level folder, and SPTInstaller's SetupClientTask). user/mods/ is unchanged. -->
       <ZipStagingRoot>$(BaseIntermediateOutputPath)_zip_staging</ZipStagingRoot>
-      <ZipStagingMod>$(ZipStagingRoot)\SPT\user\mods\$(ProjectName)</ZipStagingMod>
-      <ZipOutput>$(ProjectDir)bin\Release\$(ProjectName)-v$(Version).zip</ZipOutput>
+      <ZipStagingMod>$(ZipStagingRoot)/SPT_Runtime/user/mods/$(ProjectName)</ZipStagingMod>
+      <ZipOutput>$(ProjectDir)bin/Release/$(ProjectName)-v$(Version).zip</ZipOutput>
     </PropertyGroup>
 
     <RemoveDir Directories="$(ZipStagingRoot)" />
     <MakeDir Directories="$(ZipStagingMod)" />
 
     <ItemGroup>
-      <ZipFiles Include="$(OutputPath)**\*" Exclude="$(OutputPath)_zip_staging\**" />
+      <ZipFiles Include="$(OutputPath)**/*" />
     </ItemGroup>
 
     <Copy SourceFiles="@(ZipFiles)"
-          DestinationFiles="@(ZipFiles->'$(ZipStagingMod)\%(RecursiveDir)%(Filename)%(Extension)')" />
+          DestinationFiles="@(ZipFiles->'$(ZipStagingMod)/%(RecursiveDir)%(Filename)%(Extension)')" />
 
     <ZipDirectory SourceDirectory="$(ZipStagingRoot)"
                   DestinationFile="$(ZipOutput)"

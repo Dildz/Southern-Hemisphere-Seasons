@@ -1,10 +1,10 @@
 # Southern-Hemisphere-Seasons
 
-Version: 2.0.0
+Version: 3.0.0
 
 Author: Dildz
 
-SPT Version: 4.0.x
+SPT Version: 4.1.x
 
 
 ## Overview:
@@ -22,7 +22,12 @@ SPT Version: 4.0.x
 
 ## Installation:
 
-1. Download and Extract: Download the mod package zip from releases and extract it into your SPT directory.
+1. Download and Extract: Download the mod package zip from releases and extract it into your game root
+   (the folder containing `SPT_Runtime/`). The zip already contains the `SPT_Runtime\user\mods\` path,
+   so the mod lands in `SPT_Runtime\user\mods\SouthernHemisphereSeasons`.
+
+   > Note for 4.0 users: SPT 4.1 renamed the server folder from `SPT/` to `SPT_Runtime/`. Use the 4.0.x
+   > release of this mod on SPT 4.0 — a 4.1 build will not load on a 4.0 server.
 
 2. Configuration:
    - The mod comes with a `config/config.jsonc` file where you can enable or disable the mod, force a season, or allow SPT seasonal events to override.

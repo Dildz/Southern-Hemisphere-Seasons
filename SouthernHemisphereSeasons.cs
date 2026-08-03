@@ -1,30 +1,29 @@
+using SPTarkov.Common.Models.Logging;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
-using SPTarkov.Server.Core.Helpers;
+using SPTarkov.Server.Core.Helpers.Server;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Spt.Mod;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Server.Core.Services.InRaid;
 using System.Reflection;
 using System.Text.Json;
 
 namespace SouthernHemisphereSeasons;
 
-public record ModMetadata : AbstractModMetadata
+public record ModMetadata : IModMetadata
 {
-    public override string ModGuid { get; init; } = "com.dildz.southern-hemisphere-seasons";
-    public override string Name { get; init; } = "Southern-Hemisphere-Seasons";
-    public override string Author { get; init; } = "Dildz";
-    public override List<string>? Contributors { get; init; } = ["bushtail"];
-    public override SemanticVersioning.Version Version { get; init; } = new("2.0.0");
-    public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.0");
-    public override List<string>? Incompatibilities { get; init; }
-    public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
-    public override string? Url { get; init; }
-    public override bool? IsBundleMod { get; init; } = false;
-    public override string License { get; init; } = "MIT";
+    public string ModGuid { get; init; } = "com.dildz.southern-hemisphere-seasons";
+    public string Name { get; init; } = "Southern-Hemisphere-Seasons";
+    public string Author { get; init; } = "Dildz";
+    public List<string>? Contributors { get; init; } = ["bushtail"];
+    public SemanticVersioning.Version Version { get; init; } = new("3.0.0");
+    public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.0");
+    public bool HasPrepatcher { get; init; } = false;
+    public List<string>? Incompatibilities { get; init; }
+    public Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
+    public string? Url { get; init; }
+    public string License { get; init; } = "MIT";
 }
 
 public record ModConfig
@@ -42,51 +41,47 @@ public static class SeasonState
     public static bool EventSeasonActive { get; set; }
 }
 
-// Run after PostSptModLoader so we override SPT's own weather setup and regenerate the forecast.
-#pragma warning disable CS0618
-[Injectable(TypePriority = OnLoadOrder.PostSptModLoader + 1)]
+// PostLoad is the last stage, so we override SPT's own weather setup and regenerate the forecast after
+// everything else has had its say. (4.0 used PostSptModLoader, which no longer exists.)
+[Injectable(TypePriority = OnLoadOrder.PostLoad + 1)]
 public class SeasonLoader(
     ISptLogger<SeasonLoader> logger,
-    ConfigServer configServer,
+    WeatherConfig weatherConfig,
     RaidWeatherService raidWeatherService,
     ModHelper modHelper) : IOnLoad
 {
-    private readonly WeatherConfig _weatherConfig = configServer.GetConfig<WeatherConfig>();
-#pragma warning restore CS0618
-
     private const string ModName = "[Southern-Hemisphere-Seasons]";
 
-    public Task OnLoad()
+    public async Task OnLoadAsync(CancellationToken cancellationToken)
     {
-        LoadConfig();
+        await LoadConfigAsync(cancellationToken);
 
         if (!SeasonState.Config.Enabled)
         {
             logger.Info($"{ModName} Mod is disabled in config.jsonc");
-            return Task.CompletedTask;
+            return;
         }
 
         // If a seasonal event already forced a season and we're configured to respect that, back off
-        if (SeasonState.Config.AllowEventSeason && _weatherConfig.OverrideSeason.HasValue)
+        if (SeasonState.Config.AllowEventSeason && weatherConfig.OverrideSeason.HasValue)
         {
             SeasonState.EventSeasonActive = true;
-            SeasonState.LastSeason = _weatherConfig.OverrideSeason.Value;
-            logger.Info($"{ModName} Seasonal event detected - respecting event season: {SeasonHelper.GetSeasonName(_weatherConfig.OverrideSeason.Value)}");
-            return Task.CompletedTask;
+            SeasonState.LastSeason = weatherConfig.OverrideSeason.Value;
+            logger.Info($"{ModName} Seasonal event detected - respecting event season: {SeasonHelper.GetSeasonName(weatherConfig.OverrideSeason.Value)}");
+            return;
         }
 
         var season = SeasonHelper.GetSeason(SeasonState.Config);
-        _weatherConfig.OverrideSeason = season;
+        weatherConfig.OverrideSeason = season;
         SeasonState.LastSeason = season;
 
         // Regenerate the weather forecast with our season (SPT already generated one, we need to replace it)
         raidWeatherService.GenerateFutureWeatherAndCache(season);
 
         logger.Success($"{ModName} Loaded - Season set to: {SeasonHelper.GetSeasonName(season)}");
-        return Task.CompletedTask;
     }
 
-    private void LoadConfig()
+    private async Task LoadConfigAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -99,7 +94,7 @@ public class SeasonLoader(
                 return;
             }
 
-            var json = File.ReadAllText(configPath);
+            var json = await File.ReadAllTextAsync(configPath, cancellationToken);
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
@@ -119,34 +114,28 @@ public class SeasonLoader(
 
 // Recheck the season every hour for long-running servers.
 [Injectable(TypePriority = OnUpdateOrder.InsuranceCallbacks)]
-#pragma warning disable CS0618
 public class SeasonUpdater(
     ISptLogger<SeasonUpdater> logger,
-    ConfigServer configServer,
+    WeatherConfig weatherConfig,
     RaidWeatherService raidWeatherService) : IOnUpdate
 {
-    private readonly WeatherConfig _weatherConfig = configServer.GetConfig<WeatherConfig>();
-#pragma warning restore CS0618
-
     private const string ModName = "[Southern-Hemisphere-Seasons]";
-    private const long CheckIntervalMs = 3_600_000; // 1 hour
-    private long _timeSinceLastCheck;
+    private const long CheckIntervalSeconds = 3600; // 1 hour
 
-    public Task<bool> OnUpdate(long timeSinceLastRun)
+    public Task<bool> OnUpdateAsync(long secondsSinceLastRun, CancellationToken cancellationToken)
     {
         if (!SeasonState.Config.Enabled || SeasonState.EventSeasonActive)
             return Task.FromResult(true);
 
-        _timeSinceLastCheck += timeSinceLastRun;
-        if (_timeSinceLastCheck < CheckIntervalMs)
-            return Task.FromResult(true);
-
-        _timeSinceLastCheck = 0;
+        // Returning false leaves our last-run timestamp untouched, so secondsSinceLastRun keeps
+        // accumulating across the server's 5s tick until an hour has passed. No manual counter needed.
+        if (secondsSinceLastRun < CheckIntervalSeconds)
+            return Task.FromResult(false);
 
         var season = SeasonHelper.GetSeason(SeasonState.Config);
         if (season != SeasonState.LastSeason)
         {
-            _weatherConfig.OverrideSeason = season;
+            weatherConfig.OverrideSeason = season;
             SeasonState.LastSeason = season;
             raidWeatherService.GenerateFutureWeatherAndCache(season);
             logger.Success($"{ModName} Season changed to: {SeasonHelper.GetSeasonName(season)}");
@@ -168,12 +157,17 @@ public static class SeasonHelper
         "Early Spring"  // 5
     ];
 
-    public static Season GetSeason(ModConfig config)
+    public static Season GetSeason(ModConfig config) => GetSeason(config, DateTime.Now);
+
+    /// <summary>
+    /// Overload taking the date explicitly, so the calendar logic can be tested without the system clock.
+    /// </summary>
+    public static Season GetSeason(ModConfig config, DateTime now)
     {
         if (config.ForceSeason is { } forced && forced >= 0 && forced <= 5)
             return (Season)forced;
 
-        return GetSeasonFromDate();
+        return GetSeasonFromDate(now);
     }
 
     /// <summary>
@@ -185,9 +179,9 @@ public static class SeasonHelper
     /// - Early Spring: September 1 - September 30
     /// - Spring:       October 1 - November 30
     /// </summary>
-    private static Season GetSeasonFromDate()
+    public static Season GetSeasonFromDate(DateTime date)
     {
-        var month = DateTime.Now.Month;
+        var month = date.Month;
 
         return month switch
         {
